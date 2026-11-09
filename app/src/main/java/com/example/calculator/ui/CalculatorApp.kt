@@ -23,6 +23,7 @@ import com.example.calculator.ui.navigation.*
 import com.example.calculator.ui.screens.*
 import com.example.calculator.ui.theme.TerminalColors as C
 import kotlinx.coroutines.launch
+import com.example.calculator.ui.components.SwipeHoldNavigation
 
 @Composable
 fun CalculatorApp(vm: CalculatorViewModel = viewModel()) {
@@ -32,72 +33,185 @@ fun CalculatorApp(vm: CalculatorViewModel = viewModel()) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val view = LocalView.current
-    val haptics = remember(context.applicationContext) { HapticFeedbackManager(context.applicationContext) }
+    val haptics =
+        remember(context.applicationContext) { HapticFeedbackManager(context.applicationContext) }
     DisposableEffect(haptics) { onDispose { haptics.close() } }
     val level by rememberUpdatedState(state.hapticIntensity)
-    val feedback: (FeedbackKind) -> Unit = remember(haptics, view) { { kind -> haptics.perform(view, level, kind) } }
-    LaunchedEffect(drawer.currentValue) {
-        if(drawer.currentValue == DrawerValue.Open) feedback(FeedbackKind.Navigation)
+    val feedback: (FeedbackKind) -> Unit =
+        remember(haptics, view) { { kind -> haptics.perform(view, level, kind) } }
+    val version = remember {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
     }
-    val version = remember { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0" }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val drawerWidth = (maxWidth * .84f).coerceAtMost(360.dp)
         ModalNavigationDrawer(
-            drawerState = drawer, gesturesEnabled = true,
+            drawerState = drawer, gesturesEnabled = false,
             scrimColor = C.Background.copy(alpha = .7f),
             drawerContent = {
                 ModalDrawerSheet(Modifier.width(drawerWidth), drawerContainerColor = C.Background) {
-                    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(16.dp)) {
-                        Row(Modifier.padding(vertical = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Text("[ >_ ]", color = C.Blue, fontFamily = FontFamily.Monospace,
-                                style = MaterialTheme.typography.labelMedium)
+                    Column(
+                        Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)
+                            .padding(16.dp)
+                    ) {
+                        Row(
+                            Modifier.padding(vertical = 12.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "[ >_ ]", color = C.Blue, fontFamily = FontFamily.Monospace,
+                                style = MaterialTheme.typography.labelMedium
+                            )
                             Spacer(Modifier.width(8.dp))
-                            Text("calculator@local:~$", color = C.Secondary, fontFamily = FontFamily.Monospace,
-                                style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                            Text(
+                                "calculator@local:~$",
+                                color = C.Secondary,
+                                fontFamily = FontFamily.Monospace,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1
+                            )
                         }
-                        Text("> MODULES", color = C.Secondary, fontFamily = FontFamily.Monospace,
-                            style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
+                        Text(
+                            "> MODULES",
+                            color = C.Secondary,
+                            fontFamily = FontFamily.Monospace,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
+                        )
                         HorizontalDivider(Modifier.padding(bottom = 8.dp), color = C.Border)
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                             Destination.entries.forEachIndexed { index, destination ->
-                                if (destination == Destination.Settings) HorizontalDivider(Modifier.padding(vertical = 12.dp), color = C.Border)
-                                val activeColor by animateColorAsState(if(selected == destination) C.Blue else C.Secondary,
-                                    tween(100), label = "Module selection")
+                                if (destination == Destination.Settings) HorizontalDivider(
+                                    Modifier.padding(
+                                        vertical = 12.dp
+                                    ), color = C.Border
+                                )
+                                val activeColor by animateColorAsState(
+                                    if (selected == destination) C.Blue else C.Secondary,
+                                    tween(100), label = "Module selection"
+                                )
                                 NavigationDrawerItem(
                                     modifier = Modifier.heightIn(min = 52.dp),
-                                    label = { Text(if(destination == Destination.Scientific) "Scientific" else destination.title, style = MaterialTheme.typography.bodyMedium) },
+                                    label = {
+                                        Text(
+                                            if (destination == Destination.Scientific) "Scientific" else destination.title,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    },
                                     icon = { TerminalIcon(index, activeColor) },
                                     selected = selected == destination,
-                                    onClick = { feedback(FeedbackKind.Navigation); selected = destination; scope.launch { drawer.close() } },
-                                    colors = NavigationDrawerItemDefaults.colors(selectedContainerColor = C.DeepBlue,
-                                        selectedTextColor = C.Blue, unselectedTextColor = C.Text),
+                                    onClick = {
+                                        feedback(FeedbackKind.Navigation); selected =
+                                        destination; scope.launch { drawer.close() }
+                                    },
+                                    colors = NavigationDrawerItemDefaults.colors(
+                                        selectedContainerColor = C.DeepBlue,
+                                        selectedTextColor = C.Blue, unselectedTextColor = C.Text
+                                    ),
                                 )
                             }
                         }
-                        Text("LOCAL ONLY  /  v$version", Modifier.padding(top = 16.dp), color = C.Secondary,
-                            fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                        Text(
+                            "LOCAL ONLY  /  v$version",
+                            Modifier.padding(top = 16.dp),
+                            color = C.Secondary,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp
+                        )
                     }
                 }
             },
         ) {
-            Surface(Modifier.fillMaxSize(), color = C.Background) {
-                Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 16.dp)) {
-                    TerminalHeader(selected.title) { scope.launch { drawer.open() } }
-                    when(selected) {
-                        Destination.Calculator -> CalculatorScreen(state, vm, feedback, Modifier.weight(1f))
-                        Destination.History -> HistoryScreen(state.history, { vm.edit(it); selected = Destination.Calculator }, vm::clearHistory)
-                        Destination.Settings -> SettingsScreen(state.hapticIntensity, haptics.capabilityNote) { intensity -> vm.setHapticIntensity(intensity); haptics.perform(view, intensity, FeedbackKind.Number) }
-                        Destination.About -> AboutScreen(version)
-                        else -> PlannedScreen(selected)
+            SwipeHoldNavigation(
+                modifier = Modifier.fillMaxSize(),
+                enabled = drawer.isClosed,
+
+                onOpenDrawer = {
+                    scope.launch {
+                        drawer.open()
+                    }
+                },
+
+                onHoldConfirmed = {
+                    feedback(FeedbackKind.Navigation)
+                }
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = C.Background
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .windowInsetsPadding(WindowInsets.safeDrawing)
+                            .padding(horizontal = 16.dp)
+                    ) {
+
+                        TerminalHeader(selected.title) {
+                            feedback(FeedbackKind.Navigation)
+
+                            scope.launch {
+                                drawer.open()
+                            }
+                        }
+
+                        when (selected) {
+
+                            Destination.Calculator -> {
+                                CalculatorScreen(
+                                    state,
+                                    vm,
+                                    feedback,
+                                    Modifier.weight(1f)
+                                )
+                            }
+
+                            Destination.History -> {
+                                HistoryScreen(
+                                    state.history,
+                                    {
+                                        vm.edit(it)
+                                        selected = Destination.Calculator
+                                    },
+                                    vm::clearHistory
+                                )
+                            }
+
+                            Destination.Settings -> {
+                                SettingsScreen(
+                                    state.hapticIntensity,
+                                    haptics.capabilityNote
+                                ) { intensity ->
+
+                                    vm.setHapticIntensity(intensity)
+
+                                    haptics.perform(
+                                        view,
+                                        intensity,
+                                        FeedbackKind.Number
+                                    )
+                                }
+                            }
+
+                            Destination.About -> {
+                                AboutScreen(version)
+                            }
+
+                            else -> {
+                                PlannedScreen(selected)
+                            }
+                        }
                     }
                 }
             }
+            // Register after the drawer so its internal callback cannot shadow module navigation.
+            BackHandler(enabled = drawer.isOpen || selected != Destination.Calculator) {
+                if (drawer.isOpen) {
+                    feedback(FeedbackKind.Navigation); scope.launch { drawer.close() }
+                } else selected = Destination.Calculator
+            }
+
         }
-    }
-    // Register after the drawer so its internal callback cannot shadow module navigation.
-    BackHandler(enabled = drawer.isOpen || selected != Destination.Calculator) {
-        if (drawer.isOpen) { feedback(FeedbackKind.Navigation); scope.launch { drawer.close() } }
-        else selected = Destination.Calculator
+
     }
 
 }
