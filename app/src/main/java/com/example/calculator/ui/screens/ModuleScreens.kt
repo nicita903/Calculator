@@ -5,7 +5,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
+import com.example.calculator.feedback.HapticIntensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -29,7 +34,7 @@ fun TerminalHeader(title: String, onMenu: () -> Unit) {
         }
         Row(Modifier.padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("> ", color = C.Blue, fontFamily = FontFamily.Monospace, fontSize = 24.sp)
-            Text(title, color = C.Text, fontSize = 24.sp, maxLines = 1, modifier = Modifier.weight(1f, fill = false), overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Text(title, color = C.Text, fontSize = 28.sp, maxLines = 1, modifier = Modifier.weight(1f, fill = false), overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             Text("_", color = C.Blue, fontFamily = FontFamily.Monospace, fontSize = 24.sp)
         }
     }
@@ -64,10 +69,25 @@ fun HistoryScreen(entries: List<HistoryEntry>, onRecall: (String) -> Unit, onCle
 }
 
 @Composable
-fun SettingsScreen(haptics: Boolean, onToggle: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) { Text("Key feedback"); Text("Optional haptic feedback", color = C.Secondary, fontSize = 12.sp) }
-        Switch(checked = haptics, onCheckedChange = { onToggle() })
+fun SettingsScreen(level: HapticIntensity, capability: String, onSelect: (HapticIntensity) -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Text("> INTERACTION", color = C.Blue, fontFamily = FontFamily.Monospace,
+            style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(vertical = 16.dp))
+        Text("Haptic Feedback", style = MaterialTheme.typography.titleMedium)
+        Text("Intensity · " + level.name, color = C.Secondary, style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+        HapticIntensity.entries.forEach { option ->
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                .selectable(selected = level == option, role = Role.RadioButton, onClick = { onSelect(option) })
+                .padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(option.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                RadioButton(selected = level == option, onClick = null)
+            }
+        }
+        HorizontalDivider(Modifier.padding(vertical = 12.dp), color = C.Border)
+        Text(capability, color = C.Secondary, style = MaterialTheme.typography.bodyMedium)
+        Text("Long-press the expression to select all; tap to position the cursor.", color = C.Secondary,
+            style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 16.dp))
     }
 }
 

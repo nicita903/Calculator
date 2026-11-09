@@ -4,9 +4,9 @@ Phase 1 foundation for a fully offline Android mathematics app. Open this direct
 
 ## Implemented
 
-AMOLED Compose Material 3 UI, left slide-out module drawer (84% width, capped at 360dp), editable arithmetic, selection-aware keypad insertion/deletion, copy/paste, session undo/redo, live preview, optional haptics stored in DataStore, and Room history (latest 200 entries). Expression and selected destination survive recreation. No internet permission, accounts, telemetry, or mathematical services. Backup is disabled.
+AMOLED Compose Material 3 UI, left slide-out module drawer (84% width, capped at 360dp), editable arithmetic, selection-aware keypad insertion/deletion, copy/paste, session undo/redo, live preview, five-level haptic intensity stored in DataStore, and Room history (latest 200 entries). Expression and selected destination survive recreation. No internet permission, accounts, telemetry, or mathematical services. Backup is disabled.
 
-The Gallery source was not supplied; the terminal header and blue palette follow the brief. Scientific, Equation Solver and Graphing show explicit planned screens. History, Settings and About are functional. The calculator uses a fixed five-row keypad with no vertical scroll; short landscape windows use a side-by-side display and keypad.
+Typography now follows the local Gallery source: default content font and monospace terminal elements. Scientific, Equation Solver and Graphing show explicit planned screens. History, Settings and About are functional. The calculator uses a fixed five-row keypad with no vertical scroll; short landscape windows use a side-by-side display and keypad.
 
 ## Files and architecture
 
@@ -33,6 +33,10 @@ Finite decimal operations are exact. Repeating division uses DECIMAL128 (34 sign
 APK: app/build/outputs/apk/debug/app-debug.apk
 
 Device checks: enter 0.1+0.2 (0.3), -(2+3)*4 (-20), 1/3 (approximation), 1/0 (error); edit in the middle, undo/redo, paste invalid text, rotate, recall/clear history, relaunch and check persistence, toggle haptics, use large fonts, and verify bottom navigation with gesture and three-button navigation.
+
+## Latest UI refinement
+
+See [refinement notes and validation](docs/refinement.md) for the non-IME editor, Strong default haptics, cleaned drawer and device checks.
 
 ## Next stages
 

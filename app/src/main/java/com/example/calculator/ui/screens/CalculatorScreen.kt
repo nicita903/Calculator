@@ -1,63 +1,63 @@
 package com.example.calculator.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.PressInteraction
+import android.content.ClipData
+import com.example.calculator.feedback.*
+import com.example.calculator.ui.components.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
+import kotlinx.coroutines.launch
 import com.example.calculator.CalculatorState
 import com.example.calculator.CalculatorViewModel
 import com.example.calculator.ui.theme.TerminalColors as C
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 @Composable
-fun CalculatorScreen(state: CalculatorState, vm: CalculatorViewModel, modifier: Modifier = Modifier) {
+fun CalculatorScreen(state: CalculatorState, vm: CalculatorViewModel, feedback: (FeedbackKind) -> Unit, modifier: Modifier = Modifier) {
     var editor by rememberSaveable(stateSaver = TextFieldValue.Saver) {
         mutableStateOf(TextFieldValue(state.expression, TextRange(state.expression.length)))
     }
-    val clipboard = LocalClipboardManager.current
-    val haptic = LocalHapticFeedback.current
+    val clipboard = LocalClipboard.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(Unit) {
+        keyboardController?.hide()
+    }
     LaunchedEffect(state.expression) {
         if(editor.text != state.expression) editor = TextFieldValue(state.expression, TextRange(state.expression.length))
     }
     fun insert(text: String) {
-        val start = editor.selection.min
-        val next = editor.text.replaceRange(start, editor.selection.max, text)
-        if(next.length <= 512) {
-            editor = TextFieldValue(next, TextRange(start + text.length))
-            vm.edit(next)
-        }
+        val next = insertAtSelection(editor, text)
+        if(next != editor) { editor = next; vm.edit(next.text) }
     }
     fun press(key: String) {
-        if(state.haptics) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         when(key) {
-            "AC" -> vm.edit("")
+            "AC" -> { editor = TextFieldValue(""); vm.edit("") }
             "=" -> vm.calculate()
             "±" -> {
                 val next = if(editor.text.isEmpty()) "-" else "-(" + editor.text + ")"
                 if(next.length <= 512) { editor = TextFieldValue(next, TextRange(next.length)); vm.edit(next) }
             }
             "⌫" -> {
-                val start = editor.selection.min
-                if(start != editor.selection.max) insert("")
-                else if(start > 0) {
-                    val next = editor.text.removeRange(start - 1, start)
-                    editor = TextFieldValue(next, TextRange(start - 1)); vm.edit(next)
-                }
+                val next = deleteAtSelection(editor)
+                editor = next; vm.edit(next.text)
             }
             else -> insert(key)
         }
@@ -67,15 +67,7 @@ fun CalculatorScreen(state: CalculatorState, vm: CalculatorViewModel, modifier: 
         val compact = maxHeight < 470.dp
         val display: @Composable (Modifier) -> Unit = { displayModifier ->
             Column(displayModifier, verticalArrangement = Arrangement.Center) {
-                BasicTextField(editor, onValueChange = { if(it.text.length <= 512) { editor = it; vm.edit(it.text) } },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = if(compact) 4.dp else 12.dp),
-                    singleLine = true, cursorBrush = SolidColor(C.Blue),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, showKeyboardOnFocus = false),
-                    textStyle = LocalTextStyle.current.copy(color = C.Text, fontSize = if(compact) 25.sp else 32.sp, textAlign = TextAlign.End),
-                    decorationBox = { field -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                        if(editor.text.isEmpty()) Text("0", color = C.Secondary, fontSize = if(compact) 25.sp else 32.sp)
-                        field()
-                    } })
+                ExpressionEditor(editor, { editor = it }, compact)
                 val scroll = rememberScrollState()
                 LaunchedEffect(state.result) { scroll.animateScrollTo(scroll.maxValue) }
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
@@ -89,24 +81,24 @@ fun CalculatorScreen(state: CalculatorState, vm: CalculatorViewModel, modifier: 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     TextButton(onClick = vm::undo, contentPadding = PaddingValues(4.dp)) { Text("Undo", fontSize = 12.sp) }
                     TextButton(onClick = vm::redo, contentPadding = PaddingValues(4.dp)) { Text("Redo", fontSize = 12.sp) }
-                    TextButton(onClick = { clipboard.setText(AnnotatedString((if(state.approximate) "≈ " else "") + state.result)) }, contentPadding = PaddingValues(4.dp)) { Text("Copy", fontSize = 12.sp) }
-                    TextButton(onClick = { clipboard.getText()?.text?.let(::insert) }, contentPadding = PaddingValues(4.dp)) { Text("Paste", fontSize = 12.sp) }
-                    TextButton(onClick = { press("⌫") }, contentPadding = PaddingValues(4.dp)) { Text("⌫", fontSize = 18.sp) }
+                    TextButton(onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Result", (if(state.approximate) "≈ " else "") + state.result))) } }, contentPadding = PaddingValues(4.dp)) { Text("Copy", fontSize = 12.sp) }
+                    TextButton(onClick = { scope.launch { clipboard.getClipEntry()?.clipData?.let { clip -> if(clip.itemCount > 0) insert(clip.getItemAt(0).coerceToText(context).toString()) } } }, contentPadding = PaddingValues(4.dp)) { Text("Paste", fontSize = 12.sp) }
+                    TextButton(onClick = { feedback(FeedbackKind.Clear); press("⌫") }, contentPadding = PaddingValues(4.dp)) { Text("⌫", fontSize = 18.sp) }
                 }
             }
         }
         if(landscape) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             display(Modifier.weight(1f).fillMaxHeight())
-            Keypad(Modifier.weight(1f).fillMaxHeight(), ::press)
+            Keypad(Modifier.weight(1f).fillMaxHeight(), ::press, feedback)
         } else Column(Modifier.fillMaxSize()) {
             display(Modifier.weight(1f).fillMaxWidth())
-            Keypad(Modifier.fillMaxWidth().weight(if(compact) 2.2f else 2f), ::press)
+            Keypad(Modifier.fillMaxWidth().weight(if(compact) 2.2f else 2f), ::press, feedback)
         }
     }
 }
 
 @Composable
-private fun Keypad(modifier: Modifier, onPress: (String) -> Unit) {
+private fun Keypad(modifier: Modifier, onPress: (String) -> Unit, feedback: (FeedbackKind) -> Unit) {
     val keys = remember { listOf(listOf("AC", "(", ")", "÷"), listOf("7", "8", "9", "×"),
         listOf("4", "5", "6", "−"), listOf("1", "2", "3", "+"), listOf("±", "0", ".", "=")) }
     BoxWithConstraints(modifier) {
@@ -118,7 +110,17 @@ private fun Keypad(modifier: Modifier, onPress: (String) -> Unit) {
                     row.forEach { key ->
                         val interaction = remember { MutableInteractionSource() }
                         val pressed by interaction.collectIsPressedAsState()
-                        val scale by animateFloatAsState(if(pressed) .96f else 1f, label = "Key press")
+                        val scale by animateFloatAsState(if(pressed) .96f else 1f, tween(85), label = "Key press")
+                        val latestFeedback by rememberUpdatedState(feedback)
+                        LaunchedEffect(interaction) {
+                            interaction.interactions.collect { event ->
+                                if(event is PressInteraction.Press) latestFeedback(when(key) {
+                                    "=" -> FeedbackKind.Equals; "AC" -> FeedbackKind.Clear
+                                    in "0".."9", "." -> FeedbackKind.Number
+                                    else -> FeedbackKind.Operator
+                                })
+                            }
+                        }
                         Button(onClick = { onPress(key) }, modifier = Modifier.weight(1f).fillMaxHeight().scale(scale),
                             interactionSource = interaction, shape = RoundedCornerShape(16.dp), contentPadding = PaddingValues(0.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = if(key == "=") C.Blue else C.Button,
