@@ -1,31 +1,57 @@
 package com.example.calculator.ui.screens
 
+import android.content.ClipData
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.interaction.PressInteraction
-import android.content.ClipData
-import com.example.calculator.feedback.*
-import com.example.calculator.ui.components.*
-import androidx.compose.foundation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.*
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.platform.*
-import androidx.compose.ui.text.*
-import androidx.compose.ui.text.input.*
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.*
-import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.calculator.CalculatorState
 import com.example.calculator.CalculatorViewModel
+import com.example.calculator.feedback.FeedbackKind
+import com.example.calculator.ui.components.ExpressionEditor
+import com.example.calculator.ui.components.deleteAtSelection
+import com.example.calculator.ui.components.insertAtSelection
+import kotlinx.coroutines.launch
 import com.example.calculator.ui.theme.TerminalColors as C
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 
 @Composable
 fun CalculatorScreen(state: CalculatorState, vm: CalculatorViewModel, feedback: (FeedbackKind) -> Unit, modifier: Modifier = Modifier) {
@@ -89,43 +115,131 @@ fun CalculatorScreen(state: CalculatorState, vm: CalculatorViewModel, feedback: 
         }
         if(landscape) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             display(Modifier.weight(1f).fillMaxHeight())
-            Keypad(Modifier.weight(1f).fillMaxHeight(), ::press, feedback)
+            Keypad(Modifier.weight(1f).fillMaxHeight(), ::press, feedback = feedback)
         } else Column(Modifier.fillMaxSize()) {
             display(Modifier.weight(1f).fillMaxWidth())
-            Keypad(Modifier.fillMaxWidth().weight(if(compact) 2.2f else 2f), ::press, feedback)
+            Keypad(Modifier.fillMaxWidth().weight(if(compact) 2.2f else 2f), ::press, feedback = feedback)
         }
     }
 }
 
 @Composable
-private fun Keypad(modifier: Modifier, onPress: (String) -> Unit, feedback: (FeedbackKind) -> Unit) {
-    val keys = remember { listOf(listOf("AC", "(", ")", "÷"), listOf("7", "8", "9", "×"),
-        listOf("4", "5", "6", "−"), listOf("1", "2", "3", "+"), listOf("±", "0", ".", "=")) }
+private fun Keypad(
+    modifier: Modifier,
+    onPress: (String) -> Unit,
+    feedback: (FeedbackKind) -> Unit
+
+) {
+    val keys = remember {
+        listOf(
+            listOf("AC", "(", ")", "÷"),
+            listOf("7", "8", "9", "×"),
+            listOf("4", "5", "6", "−"),
+            listOf("1", "2", "3", "+"),
+            listOf("±", "0", ".", "=")
+        )
+    }
+
     BoxWithConstraints(modifier) {
-        val gap = if(maxHeight < 280.dp) 6.dp else 10.dp
-        val font = if(maxHeight < 280.dp) 23.sp else 30.sp
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
+
+        val gap = if (maxHeight < 280.dp) 6.dp else 10.dp
+        val font = if (maxHeight < 280.dp) 23.sp else 30.sp
+
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
             keys.forEach { row ->
-                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap)) {
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
                     row.forEach { key ->
-                        val interaction = remember { MutableInteractionSource() }
+
+                        val interaction = remember {
+                            MutableInteractionSource()
+                        }
+
                         val pressed by interaction.collectIsPressedAsState()
-                        val scale by animateFloatAsState(if(pressed) .96f else 1f, tween(85), label = "Key press")
-                        val latestFeedback by rememberUpdatedState(feedback)
+
+                        val currentFeedback by rememberUpdatedState(feedback)
+                        val currentKey by rememberUpdatedState(key)
+
                         LaunchedEffect(interaction) {
                             interaction.interactions.collect { event ->
-                                if(event is PressInteraction.Press) latestFeedback(when(key) {
-                                    "=" -> FeedbackKind.Equals; "AC" -> FeedbackKind.Clear
-                                    in "0".."9", "." -> FeedbackKind.Number
-                                    else -> FeedbackKind.Operator
-                                })
+
+                                if (event is PressInteraction.Press) {
+
+                                    val feedbackType = when (currentKey) {
+                                        "=" -> FeedbackKind.Equals
+                                        "AC" -> FeedbackKind.Clear
+
+                                        "+", "−", "×", "÷",
+                                        "(", ")", "±" -> FeedbackKind.Operator
+
+                                        else -> FeedbackKind.Number
+                                    }
+
+                                    currentFeedback(feedbackType)
+                                }
                             }
                         }
-                        Button(onClick = { onPress(key) }, modifier = Modifier.weight(1f).fillMaxHeight().scale(scale),
-                            interactionSource = interaction, shape = RoundedCornerShape(16.dp), contentPadding = PaddingValues(0.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = if(key == "=") C.Blue else C.Button,
-                                contentColor = if(key in listOf("AC", "÷", "×", "−", "+")) C.Blue else C.Text)) {
-                            Text(key, fontSize = font, maxLines = 1)
+
+                        val scale by animateFloatAsState(
+                            targetValue = if (pressed) 0.95f else 1f,
+                            animationSpec = tween(
+                                durationMillis = 45
+                            ),
+                            label = "Key press"
+                        )
+
+                        // Invisible touch area occupies the full cell.
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clickable(
+                                    interactionSource = interaction,
+                                    indication = null
+                                ) {
+                                    onPress(key)
+                                }
+                                .padding(gap / 2),
+                            contentAlignment = Alignment.Center
+                        ) {
+
+                            // Visible button stays smaller.
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .scale(scale)
+                                    .background(
+                                        color = if (key == "=") {
+                                            C.Blue
+                                        } else {
+                                            C.Button
+                                        },
+                                        shape = RoundedCornerShape(16.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+
+                                Text(
+                                    text = key,
+                                    fontSize = font,
+                                    color = if (
+                                        key in listOf(
+                                            "AC", "÷", "×", "−", "+"
+                                        )
+                                    ) {
+                                        C.Blue
+                                    } else {
+                                        C.Text
+                                    },
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                 }
