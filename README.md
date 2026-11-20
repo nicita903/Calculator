@@ -1,4 +1,4 @@
-# CalcTerminal Pro
+# Calculator
 
 Phase 1 foundation for a fully offline Android mathematics app. Open this directory in Android Studio and sync Gradle. Run the app configuration on an API 24+ device. The existing AGP 9.5.1, Gradle 9.6 and SDK 37 configuration is retained.
 
